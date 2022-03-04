@@ -11,6 +11,9 @@
     .lmv-markup-gui-toolbar {
       background-color: rgba(200, 230, 255, 0.85);
     }
+    button {
+      padding: 0 6px;
+    }
   </style>
 </head>
 
@@ -48,52 +51,33 @@
             >
               Edit polygon or lines
             </button>
-            <button
-              onClick="startTool()"
-              class="navbar-button button-primary"
-            >
+            <button onClick="startTool()" class="navbar-button button-primary">
               Stop Polygon tool
             </button>
           </li>
+          <li class="navbar-item">
+            <button
+              onClick="annotateEdges()"
+              class="navbar-button button-primary"
+              style="background: salmon"
+            >
+              Annotate Edges
+            </button>
           </li>
+
           <!-- Uncomment to switch pdf views -->
           <li class="navbar-item">
-            <button
-              onClick="logMeasurements()"
-              class="navbar-button button-primary"
-            >
+            <button onClick="logMeasurements()" class="navbar-button">
               Log Measurements
             </button>
-          </li> 
-          <!--
-          <li class="navbar-item">
-            <button
-              onClick="initializeViewer('pdfs/qcad3.pdf')"
-              class="navbar-button button-primary"
-            >
-              section.pdf
-            </button>
           </li>
           <li class="navbar-item">
-            <button
-              onClick="initializeViewer('pdfs/2018035DCD1008A0.pdf')"
-              class="navbar-button button-primary"
-            >
-              bug1.pdf
+            <button onClick="generateReport()" class="navbar-button button-red">
+              Generate Report
             </button>
           </li>
-          <li class="navbar-item">
-            <button
-              onClick="initializeViewer('pdfs/2018035DCD03003A4.pdf')"
-              class="navbar-button button-primary"
-            >
-              bug2.pdf
-            </button>
-          </li> -->
           <li class="navbar-itemr mobile">
-            <a class="navbar-link" href="https://kelarpacific.com"
-              >Fencing Project</a
-            >
+            <a class="navbar-link">Scanner fencing Project</a>
           </li>
         </ul>
       </div>
@@ -125,7 +109,7 @@
       console.log("loading");
       viewer.impl.unloadCurrentModel();
       if (markup) markup.hide();
-      viewer.loadModel(pdf, viewer);                   
+      viewer.loadModel(pdf, viewer);
       return;
     }
 
@@ -133,7 +117,7 @@
       env: "Local",
       useADP: false,
       // arc: false
-    };    
+    };
 
     Autodesk.Viewing.Initializer(options, () => {
       viewer = new Autodesk.Viewing.GuiViewer3D(
@@ -141,95 +125,134 @@
       );
       viewer.setTheme("light-theme");
       viewer.start();
-      if (!pdf) return;      
+      if (!pdf) return;
 
       viewer.loadExtension("Autodesk.PDF").then(() => {
         viewer.loadModel(pdf, viewer, () => {
-
-          
           viewer.loadExtension("Autodesk.Edit2D").then((edit2d) => {
             // Register all standard tools in default configuration
             edit2d.registerDefaultTools();
             window.edit2d = edit2d;
             window.layer = edit2d.defaultContext.layer;
-            window.tools = edit2d.defaultTools;           
-          });    
-          
+            window.tools = edit2d.defaultTools;
+          });
+
           // Set measurements to meters
-          viewer.loadExtension('Autodesk.Measure').then((measureExtension) => {
+          viewer.loadExtension("Autodesk.Measure").then((measureExtension) => {
             measureExtension.setUnits("m");
-          });          
+          });
 
           // Disable markup and only use Edit2D
           // viewer.loadExtension("Autodesk.Viewing.MarkupsCore");
-          // viewer.loadExtension("Autodesk.Viewing.MarkupsGui");    
+          // viewer.loadExtension("Autodesk.Viewing.MarkupsGui");
         });
-           
-      });      
-    }); 
+      });
+    });
   }
 
   if ("xserviceWorker" in navigator)
     navigator.serviceWorker.register("offline-worker.js");
 
-
   initializeViewer("pdfs/3bed.pdf");
 
-
+  // Returns converted shape units in an array
   function logMeasurements() {
-    edit2d = NOP_VIEWER.loadedExtensions['Autodesk.Edit2D'];
+    edit2d = NOP_VIEWER.loadedExtensions["Autodesk.Edit2D"];
 
     // var layer = edit2d.defaultContext.layer;
-    // var unitHandler = edit2d.defaultContext.unitHandler;    
-
+    // var unitHandler = edit2d.defaultContext.unitHandler;
 
     var layer = edit2d.defaultContext.layer;
     var unitHandler = edit2d.defaultContext.unitHandler;
     var lengthArr = [];
 
+    // Gets length of all total shapes
     var len = layer.shapes[0].getLength(unitHandler.measureTransform);
 
-    var lengthString = unitHandler.lengthToString(len);
-
-    console.log("len", len);
-    console.log("lengthString", lengthString);
-
-    var arr = [];
-
+    // Transform each side based on the unitHandler
     let a = new THREE.Vector2();
     let b = new THREE.Vector2();
 
     var shape = edit2d.defaultContext.layer.shapes[0];
     var measureTransformArr = [];
 
-    shape.enumEdges( (endPoint1, endPoint2, indexEndPoint1, indexEndPoint2) => {
-       a = endPoint1.clone();
-       b = endPoint2.clone();
-      
+    shape.enumEdges((endPoint1, endPoint2, indexEndPoint1, indexEndPoint2) => {
+      a = endPoint1.clone();
+      b = endPoint2.clone();
+
       unitHandler.measureTransform.apply(a);
       unitHandler.measureTransform.apply(b);
-            
+
       // Add the distance between the transformed points
       measureTransformArr.push(a.distanceTo(b));
     });
 
     // Total Added up
-    var total = measureTransformArr.reduce((partialSum, a) => partialSum + a, 0);
+    var total = measureTransformArr.reduce(
+      (partialSum, a) => partialSum + a,
+      0
+    );
 
     console.log("Total", total);
     console.log("Converted Total", unitHandler.lengthToString(total));
 
-    var convertedToUnitsTotal = measureTransformArr.map(v => unitHandler.lengthToString(v)  ) 
+    var convertedToUnitsTotal = measureTransformArr.map((v) =>
+      unitHandler.lengthToString(v)
+    );
 
-    console.log("Polyline Arr", measureTransformArr );
-    console.log("Converted Polyline Arr", convertedToUnitsTotal );
+    console.log("Polyline Arr", measureTransformArr);
+    console.log("Converted Polyline Arr", convertedToUnitsTotal);
+
+    return convertedToUnitsTotal;
   }
 
+  function annotateEdges() {
+    window.shapeLabels = [];
+    var poly = layer.shapes[0];
 
+    var transformedUnits = this.logMeasurements();
 
-// Convenience function for tool switching per console. E.g. startTool(tools.polygonTool)
-function startTool (tool) {
-    var controller = NOP_VIEWER.toolController;    
+    poly.enumEdges((endPoint1, endPoint2, indexEndPoint1, indexEndPoint2) => {
+      let label = new Autodesk.Edit2D.EdgeLabel(layer);
+      label.attachToEdge(poly, indexEndPoint1);
+      label.setText(transformedUnits[indexEndPoint1]);
+      window.shapeLabels.push(label);
+    });
+  }
+
+  // Use an alert to
+  function generateReport() {
+    var transformedUnits = this.logMeasurements();
+    var totalUnits = 0;
+    var markersNeeded = 0;
+
+    transformedUnits.forEach((element) => {
+      let unit = Number(element.split(" ")[0]);
+      var actual = unit / 4;
+      var remainder = actual % 4;
+
+      totalUnits += unit;
+
+      // Add actual minus the remainder
+      markersNeeded += actual - remainder;
+
+      if (remainder > 0) {
+        markersNeeded += 1;
+      }
+    });
+
+    // Round totalUnits
+    totalUnits = totalUnits.toFixed(2);
+
+    var message = `You have ${transformedUnits.length} sides, with a total of: ${totalUnits}\n`;
+    message += `Perimeter requires a marker every 4 meters:\n`;
+    message += `You need ${markersNeeded} Markers, and ${totalUnits} Meters of scanner barrier.`;
+    message += alert(message);
+  }
+
+  // Convenience function for tool switching per console. E.g. startTool(tools.polygonTool)
+  function startTool(tool) {
+    var controller = NOP_VIEWER.toolController;
 
     // Check if currently active tool is from Edit2D
     var activeTool = controller.getActiveTool();
@@ -251,5 +274,4 @@ function startTool (tool) {
     tool.setLengthLabelVisible(true);
     controller.activateTool(tool.getName());
   }
-
 </script>
