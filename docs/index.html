@@ -234,7 +234,7 @@
       totalUnits += unit;
 
       // Add actual minus the remainder
-      markersNeeded += actual - remainder;
+      markersNeeded += Math.floor(actual);
 
       if (remainder > 0) {
         markersNeeded += 1;
