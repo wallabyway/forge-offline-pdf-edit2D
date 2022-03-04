@@ -57,14 +57,15 @@
           </li>
           </li>
           <!-- Uncomment to switch pdf views -->
-          <!-- <li class="navbar-item">
+          <li class="navbar-item">
             <button
-              onClick="initializeViewer('pdfs/wood.pdf')"
+              onClick="logMeasurements()"
               class="navbar-button button-primary"
             >
-              Wood.pdf
+              Log Measurements
             </button>
-          </li>
+          </li> 
+          <!--
           <li class="navbar-item">
             <button
               onClick="initializeViewer('pdfs/qcad3.pdf')"
@@ -119,11 +120,6 @@
 <script>
   let viewer, markup;
 
-  const unitHandler = new Autodesk.Edit2D.SimpleUnitHandler(viewer);
-  unitHandler.layerUnit    = 'in';
-  unitHandler.displayUnits = 'cm';
-  unitHandler.digits       = 4;
-
   function initializeViewer(pdf) {
     if (viewer) {
       console.log("loading");
@@ -137,7 +133,7 @@
       env: "Local",
       useADP: false,
       // arc: false
-    };
+    };    
 
     Autodesk.Viewing.Initializer(options, () => {
       viewer = new Autodesk.Viewing.GuiViewer3D(
@@ -145,16 +141,25 @@
       );
       viewer.setTheme("light-theme");
       viewer.start();
-      if (!pdf) return;
+      if (!pdf) return;      
 
       viewer.loadExtension("Autodesk.PDF").then(() => {
         viewer.loadModel(pdf, viewer, () => {
+
           
           viewer.loadExtension("Autodesk.Edit2D").then((edit2d) => {
             // Register all standard tools in default configuration
             edit2d.registerDefaultTools();
-           
-          }); 
+            window.edit2d = edit2d;
+            window.layer = edit2d.defaultContext.layer;
+            window.tools = edit2d.defaultTools;           
+          });    
+          
+          // Set measurements to meters
+          viewer.loadExtension('Autodesk.Measure').then((measureExtension) => {
+            measureExtension.setUnits("m");
+          });          
+
           // Disable markup and only use Edit2D
           // viewer.loadExtension("Autodesk.Viewing.MarkupsCore");
           // viewer.loadExtension("Autodesk.Viewing.MarkupsGui");    
@@ -171,14 +176,56 @@
   initializeViewer("pdfs/3bed.pdf");
 
 
-  setTimeout(() => {
-     // Facilitate access to extension and layer
-    window.edit2d = NOP_VIEWER.getExtension('Autodesk.Edit2D');
-    window.layer  = window.edit2d.defaultContext.layer;
-    window.tools  = window.edit2d.defaultTools;    
+  function logMeasurements() {
+    edit2d = NOP_VIEWER.loadedExtensions['Autodesk.Edit2D'];
 
-    console.log(window.tools);
-  }, 2500);
+    // var layer = edit2d.defaultContext.layer;
+    // var unitHandler = edit2d.defaultContext.unitHandler;    
+
+
+    var layer = edit2d.defaultContext.layer;
+    var unitHandler = edit2d.defaultContext.unitHandler;
+    var lengthArr = [];
+
+    var len = layer.shapes[0].getLength(unitHandler.measureTransform);
+
+    var lengthString = unitHandler.lengthToString(len);
+
+    console.log("len", len);
+    console.log("lengthString", lengthString);
+
+    var arr = [];
+
+    let a = new THREE.Vector2();
+    let b = new THREE.Vector2();
+
+    var shape = edit2d.defaultContext.layer.shapes[0];
+    var measureTransformArr = [];
+
+    shape.enumEdges( (endPoint1, endPoint2, indexEndPoint1, indexEndPoint2) => {
+       a = endPoint1.clone();
+       b = endPoint2.clone();
+      
+      unitHandler.measureTransform.apply(a);
+      unitHandler.measureTransform.apply(b);
+            
+      // Add the distance between the transformed points
+      measureTransformArr.push(a.distanceTo(b));
+    });
+
+    // Total Added up
+    var total = measureTransformArr.reduce((partialSum, a) => partialSum + a, 0);
+
+    console.log("Total", total);
+    console.log("Converted Total", unitHandler.lengthToString(total));
+
+    var convertedToUnitsTotal = measureTransformArr.map(v => unitHandler.lengthToString(v)  ) 
+
+    console.log("Polyline Arr", measureTransformArr );
+    console.log("Converted Polyline Arr", convertedToUnitsTotal );
+  }
+
+
 
 // Convenience function for tool switching per console. E.g. startTool(tools.polygonTool)
 function startTool (tool) {
